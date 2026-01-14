@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verity - Verificador de Factos IA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: linear-gradient(180deg, #0f0f1a 0%, #1a1a2e 100%);
+            min-height: 100vh;
+        }
+        .card-white {
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        .input-dark {
+            background: #1a1a2e;
+            border: 1px solid #2a2a3e;
+            border-radius: 8px;
+            color: #fff;
+            padding: 12px 16px;
+            width: 100%;
+        }
+        .input-dark::placeholder {
+            color: rgba(255,255,255,0.5);
+        }
+        .input-dark:focus {
+            outline: none;
+            border-color: #8b5cf6;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 16px 32px;
+            font-weight: 600;
+            width: 100%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
+        }
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+            border-radius: 8px;
+            padding: 12px 20px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+            background: #f9fafb;
+            color: #6b7280;
+        }
+        .tab-btn.active {
+            background: white;
+            color: #8b5cf6;
+            border-color: #8b5cf6;
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
+        }
+        .tab-btn:hover:not(.active) {
+            background: #f3f4f6;
+        }
+        .hidden { display: none !important; }
+        .loader {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #e5e7eb;
+            border-top-color: #8b5cf6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .pill {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .pill-verified { background: #d1fae5; color: #059669; }
+        .pill-mixed { background: #fef3c7; color: #d97706; }
+        .pill-unsupported { background: #fee2e2; color: #dc2626; }
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 16px 24px;
+            border-radius: 12px;
+            background: #1f2937;
+            color: white;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 100;
+        }
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="min-h-screen py-12 px-4">
+        <div class="max-w-xl mx-auto">
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <h1 class="text-4xl font-bold text-white mb-2">
+                    Verifique a veracidade
+                </h1>
+                <h2 class="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-4">
+                    de qualquer texto
+                </h2>
+                <p class="text-gray-400">
+                    Cole texto, carregue documentos ou introduza URLs. A nossa IA analisa e verifica cada afirmacao.
+                </p>
+            </div>
+
+            <!-- Main Card -->
+            <div id="input-section" class="card-white p-6">
+                <!-- API Key -->
+                <div class="flex gap-3 mb-6">
+                    <input type="text" id="api-key" placeholder="vrt_..." class="input-dark flex-1">
+                    <button onclick="createAPIKey()" class="btn-secondary whitespace-nowrap">
+                        Gerar Chave
+                    </button>
+                </div>
+
+                <!-- Tabs -->
+                <div class="flex gap-2 mb-6">
+                    <button onclick="switchTab('text')" id="tab-text" class="tab-btn">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Texto
+                    </button>
+                    <button onclick="switchTab('url')" id="tab-url" class="tab-btn active">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                        </svg>
+                        URL
+                    </button>
+                    <button onclick="switchTab('file')" id="tab-file" class="tab-btn">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                        </svg>
+                        Ficheiro
+                    </button>
+                </div>
+
+                <!-- Text Input -->
+                <div id="content-text" class="mb-6 hidden">
+                    <textarea id="text-input" rows="5" placeholder="Cole o texto que deseja verificar..."
+                        class="input-dark resize-none"></textarea>
+                    <p class="text-xs text-gray-400 mt-2">Cole texto para analise. A nossa IA extrai e verifica cada afirmacao.</p>
+                </div>
+
+                <!-- URL Input -->
+                <div id="content-url" class="mb-6">
+                    <input type="url" id="url-input" placeholder="https://www.exemplo.com/artigo" class="input-dark">
+                    <p class="text-xs text-gray-400 mt-2">Introduza o URL de uma pagina web. O conteudo sera extraido automaticamente.</p>
+                </div>
+
+                <!-- File Input -->
+                <div id="content-file" class="mb-6 hidden">
+                    <div class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-purple-400 transition"
+                         onclick="document.getElementById('file-input').click()">
+                        <svg class="w-12 h-12 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        <p class="text-gray-500 mb-1">Arraste ficheiros ou clique para selecionar</p>
+                        <p class="text-xs text-gray-400">PDF, TXT, DOCX (max 10MB)</p>
+                    </div>
+                    <input type="file" id="file-input" accept=".pdf,.txt,.docx" class="hidden" onchange="handleFile(this)">
+                    <p id="file-name" class="text-sm text-purple-500 mt-2 hidden"></p>
+                </div>
+
+                <!-- Submit Button -->
+                <button onclick="verifyContent()" class="btn-primary">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Verificar Agora
+                </button>
+            </div>
+
+            <!-- Loading -->
+            <div id="loading-section" class="card-white p-12 text-center hidden">
+                <div class="loader mx-auto mb-4"></div>
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">A analisar...</h3>
+                <p class="text-gray-500">A extrair afirmacoes e a procurar evidencias</p>
+            </div>
+
+            <!-- Results -->
+            <div id="results-section" class="hidden">
+                <div class="card-white p-6 mb-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <p class="text-sm text-gray-500">Pontuacao Geral</p>
+                            <p class="text-3xl font-bold text-gray-800" id="score-value">0</p>
+                        </div>
+                        <div class="grid grid-cols-4 gap-4 text-center">
+                            <div>
+                                <p class="text-xl font-bold text-gray-800" id="total-claims">0</p>
+                                <p class="text-xs text-gray-500">Total</p>
+                            </div>
+                            <div>
+                                <p class="text-xl font-bold text-green-600" id="verified-claims">0</p>
+                                <p class="text-xs text-gray-500">Verificado</p>
+                            </div>
+                            <div>
+                                <p class="text-xl font-bold text-yellow-600" id="mixed-claims">0</p>
+                                <p class="text-xs text-gray-500">Misto</p>
+                            </div>
+                            <div>
+                                <p class="text-xl font-bold text-red-600" id="unsupported-claims">0</p>
+                                <p class="text-xs text-gray-500">Nao Suportado</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="askExportPDF()" class="btn-secondary flex-1 flex items-center justify-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                            </svg>
+                            PDF
+                        </button>
+                        <button onclick="exportJSON()" class="btn-secondary flex-1 flex items-center justify-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
+                            JSON
+                        </button>
+                    </div>
+                </div>
+                <div id="claims-list" class="space-y-3"></div>
+                <button onclick="resetToInput()" class="btn-secondary w-full mt-4">Verificar outro texto</button>
+            </div>
+
+            <!-- Error -->
+            <div id="error-section" class="card-white p-8 text-center hidden">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
+                    <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">Erro</h3>
+                <p id="error-message" class="text-red-500 mb-4">Ocorreu um erro</p>
+                <button onclick="resetToInput()" class="btn-primary">Tentar novamente</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"><p id="toast-message"></p></div>
+
+    <!-- PDF Modal -->
+    <div id="pdf-modal" class="fixed inset-0 z-50 hidden" style="background: rgba(0,0,0,0.5);">
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-full max-w-md px-4">
+            <div class="card-white p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">Exportar como PDF</h3>
+                <div class="mb-4">
+                    <label class="block text-sm text-gray-600 mb-2">Titulo do Relatorio</label>
+                    <input type="text" id="pdf-title" placeholder="Relatorio de Verificacao" class="input-dark">
+                </div>
+                <div class="mb-4">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="include-evidence" checked class="w-4 h-4">
+                        <span class="text-sm text-gray-600">Incluir fontes</span>
+                    </label>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="closePDFModal()" class="btn-secondary flex-1">Cancelar</button>
+                    <button onclick="generatePDF()" class="btn-primary flex-1">Gerar PDF</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'url';
+        let currentResults = null;
+
+        function switchTab(tab) {
+            currentTab = tab;
+            ['text', 'url', 'file'].forEach(t => {
+                document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+                document.getElementById('content-' + t).classList.toggle('hidden', t !== tab);
+            });
+        }
+
+        function handleFile(input) {
+            if (input.files && input.files[0]) {
+                document.getElementById('file-name').textContent = input.files[0].name;
+                document.getElementById('file-name').classList.remove('hidden');
+            }
+        }
+
+        async function createAPIKey() {
+            try {
+                const response = await fetch('/api/keys', { method: 'POST' });
+                const data = await response.json();
+                if (data.key) {
+                    document.getElementById('api-key').value = data.key;
+                    showToast('Chave API criada!', 'success');
+                }
+            } catch (e) {
+                showToast('Erro ao criar chave', 'error');
+            }
+        }
+
+        async function verifyContent() {
+            const apiKey = document.getElementById('api-key').value.trim();
+            if (!apiKey) { showToast('Insira uma chave API', 'error'); return; }
+
+            let content = '';
+            if (currentTab === 'text') content = document.getElementById('text-input').value.trim();
+            else if (currentTab === 'url') content = document.getElementById('url-input').value.trim();
+
+            if (!content && currentTab !== 'file') { showToast('Insira conteudo', 'error'); return; }
+
+            showSection('loading');
+
+            try {
+                const response = await fetch('/api/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+                    body: JSON.stringify({ text: content })
+                });
+                if (!response.ok) throw new Error((await response.json()).error || 'Erro');
+                currentResults = await response.json();
+                showResults(currentResults);
+            } catch (e) {
+                showError(e.message);
+            }
+        }
+
+        function showSection(section) {
+            ['input', 'loading', 'results', 'error'].forEach(s => {
+                document.getElementById(s + '-section').classList.toggle('hidden', s !== section);
+            });
+        }
+
+        function showResults(data) {
+            showSection('results');
+            const a = data.analysis;
+            document.getElementById('score-value').textContent = a.overall_score.toFixed(1);
+            document.getElementById('total-claims').textContent = a.total_claims;
+            document.getElementById('verified-claims').textContent = a.verified_claims;
+            document.getElementById('mixed-claims').textContent = a.mixed_claims;
+            document.getElementById('unsupported-claims').textContent = a.unsupported_claims;
+            renderClaims(data.claims);
+        }
+
+        function renderClaims(claims) {
+            const labels = { verified: 'Verificado', mixed: 'Misto', unsupported: 'Nao Suportado' };
+            document.getElementById('claims-list').innerHTML = claims.map(c => `
+                <div class="card-white p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="pill pill-${c.status}">${labels[c.status] || c.status}</span>
+                        <span class="text-xs text-gray-400">${(c.confidence * 100).toFixed(0)}% confianca</span>
+                    </div>
+                    <p class="text-gray-800">${escapeHtml(c.text)}</p>
+                    ${c.reasoning ? `<p class="text-sm text-gray-500 mt-2 italic">"${escapeHtml(c.reasoning)}"</p>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function showError(msg) { showSection('error'); document.getElementById('error-message').textContent = msg; }
+        function resetToInput() { showSection('input'); }
+
+        function showToast(msg, type) {
+            const t = document.getElementById('toast');
+            document.getElementById('toast-message').textContent = msg;
+            t.style.background = type === 'error' ? '#dc2626' : type === 'success' ? '#059669' : '#6366f1';
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const d = document.createElement('div');
+            d.textContent = text;
+            return d.innerHTML;
+        }
+
+        function askExportPDF() {
+            if (!currentResults) { showToast('Sem resultados', 'error'); return; }
+            document.getElementById('pdf-modal').classList.remove('hidden');
+        }
+        function closePDFModal() { document.getElementById('pdf-modal').classList.add('hidden'); }
+
+        function generatePDF() {
+            if (!currentResults) return;
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const title = document.getElementById('pdf-title').value || 'Relatorio';
+            const a = currentResults.analysis;
+
+            doc.setFontSize(20);
+            doc.text('Verity - Relatorio', 20, 20);
+            doc.setFontSize(12);
+            doc.text(title, 20, 30);
+            doc.text('Pontuacao: ' + a.overall_score.toFixed(1) + '/10', 20, 40);
+            doc.text('Verificado: ' + a.verified_claims + ' | Misto: ' + a.mixed_claims + ' | Nao Suportado: ' + a.unsupported_claims, 20, 50);
+
+            let y = 65;
+            currentResults.claims.forEach((c, i) => {
+                if (y > 270) { doc.addPage(); y = 20; }
+                doc.setFontSize(10);
+                doc.text((i + 1) + '. [' + c.status.toUpperCase() + '] ' + c.text.substring(0, 80), 20, y);
+                y += 10;
+            });
+
+            doc.save(title.replace(/[^a-z0-9]/gi, '_') + '.pdf');
+            closePDFModal();
+            showToast('PDF exportado!', 'success');
+        }
+
+        function exportJSON() {
+            if (!currentResults) { showToast('Sem resultados', 'error'); return; }
+            const blob = new Blob([JSON.stringify(currentResults, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'verity_resultados.json';
+            a.click();
+            showToast('JSON exportado!', 'success');
+        }
+    </script>
+</body>
+</html>

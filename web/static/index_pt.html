@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verity - Verificador de Factos IA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        verified: '#10b981',
+                        mixed: '#f59e0b',
+                        unsupported: '#ef4444',
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+            color: #f5f5f7;
+            min-height: 100vh;
+        }
+
+        .glass-card {
+            background: rgba(20, 20, 35, 0.95);
+            border: 1px solid rgba(255,255,255,0.1);
+            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .input-field {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 12px;
+            color: #fff;
+            transition: all 0.3s ease;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: rgba(139, 92, 246, 0.5);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+
+        .input-field::placeholder {
+            color: rgba(255,255,255,0.4);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(139, 92, 246, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tab-btn.active {
+            background: rgba(139, 92, 246, 0.2);
+            border: 1px solid rgba(139, 92, 246, 0.5);
+            color: #a78bfa;
+        }
+
+        .tab-btn:not(.active) {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.6);
+        }
+
+        .tab-btn:not(.active):hover {
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+        }
+
+        .pill {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .pill-verified { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+        .pill-mixed { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .pill-unsupported { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+
+        .stat-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .hidden { display: none !important; }
+
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(139, 92, 246, 0.2);
+            border-top-color: #8b5cf6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .confidence-bar {
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.8s ease;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 16px 24px;
+            border-radius: 12px;
+            background: rgba(20, 20, 35, 0.95);
+            border: 1px solid rgba(255,255,255,0.1);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            z-index: 50;
+        }
+
+        .modal-content {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 51;
+            width: 100%;
+            max-width: 420px;
+            padding: 0 16px;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <div class="container mx-auto px-4 py-12 max-w-2xl">
+        <!-- Header -->
+        <div class="text-center mb-10">
+            <div class="flex items-center justify-center gap-3 mb-6">
+                <img src="assets/logo.png" alt="Verity Logo" class="w-12 h-12 rounded-xl" 
+                     onerror="this.style.display='none'; document.getElementById('fallback-logo').style.display='flex';">
+                <div id="fallback-logo" class="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 items-center justify-center hidden">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <span class="text-2xl font-bold">Verity</span>
+            </div>
+            <h1 class="text-4xl font-bold mb-3">
+                Verifique a veracidade
+                <span class="bg-gradient-to-r from-violet-400 to-purple-400 bg-clip-text text-transparent">de qualquer texto</span>
+            </h1>
+            <p class="text-white/50">Cole texto, carregue documentos ou introduza URLs. A nossa IA analisa e verifica cada afirmacao.</p>
+        </div>
+
+        <!-- Main Card -->
+        <div id="input-section" class="glass-card p-8" style="opacity: 1;">
+            <!-- API Key -->
+            <div class="flex gap-3 mb-6">
+                <input type="text" id="api-key" placeholder="vrt_..." class="input-field flex-1 px-4 py-3">
+                <button onclick="createAPIKey()" class="btn-secondary px-5 py-3 text-white/70 hover:text-white">
+                    Gerar Chave
+                </button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex gap-3 mb-6">
+                <button onclick="switchTab('text')" id="tab-text" class="tab-btn flex-1 active">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    Texto
+                </button>
+                <button onclick="switchTab('url')" id="tab-url" class="tab-btn flex-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                    </svg>
+                    URL
+                </button>
+                <button onclick="switchTab('file')" id="tab-file" class="tab-btn flex-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                    </svg>
+                    Ficheiro
+                </button>
+            </div>
+
+            <!-- Text Input -->
+            <div id="content-text" class="mb-4">
+                <textarea id="text-input" rows="5" placeholder="Cole o texto que deseja verificar..."
+                    class="input-field w-full px-4 py-4 resize-none"></textarea>
+                <p class="text-xs text-white/30 mt-2">Cole texto para analise. A nossa IA extrai e verifica cada afirmacao.</p>
+            </div>
+
+            <!-- URL Input -->
+            <div id="content-url" class="mb-4 hidden">
+                <input type="url" id="url-input" placeholder="https://www.exemplo.com/artigo"
+                    class="input-field w-full px-4 py-4">
+                <p class="text-xs text-white/30 mt-2">Introduza o URL de uma pagina web. O conteudo sera extraido automaticamente.</p>
+            </div>
+
+            <!-- File Input -->
+            <div id="content-file" class="mb-4 hidden">
+                <div class="border-2 border-dashed border-white/20 rounded-xl p-8 text-center hover:border-violet-500/50 transition cursor-pointer"
+                     onclick="document.getElementById('file-input').click()">
+                    <svg class="w-12 h-12 mx-auto mb-3 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                    </svg>
+                    <p class="text-white/50 mb-1">Arraste ficheiros ou clique para selecionar</p>
+                    <p class="text-xs text-white/30">PDF, TXT, DOCX (max 10MB)</p>
+                </div>
+                <input type="file" id="file-input" accept=".pdf,.txt,.docx" class="hidden" onchange="handleFile(this)">
+                <p id="file-name" class="text-sm text-violet-400 mt-2 hidden"></p>
+            </div>
+
+            <!-- Submit Button -->
+            <button onclick="verifyContent()" class="btn-primary w-full py-4 text-white flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Verificar Agora
+            </button>
+        </div>
+
+        <!-- Loading Section -->
+        <div id="loading-section" class="glass-card p-12 text-center hidden">
+            <div class="loader mx-auto mb-6"></div>
+            <h3 class="text-xl font-semibold mb-2">A analisar o seu texto</h3>
+            <p class="text-white/50">A extrair afirmacoes e a procurar evidencias...</p>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results-section" class="hidden">
+            <div class="glass-card p-8 mb-6">
+                <!-- Score -->
+                <div class="flex items-center gap-6 mb-6">
+                    <div class="w-24 h-24 rounded-full bg-gradient-to-br from-violet-500/20 to-purple-500/20 flex items-center justify-center border border-violet-500/30">
+                        <span id="score-value" class="text-3xl font-bold text-violet-400">0</span>
+                    </div>
+                    <div>
+                        <p class="text-white/50 text-sm">Pontuacao Geral</p>
+                        <p class="text-2xl font-bold" id="score-label">A calcular...</p>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div class="grid grid-cols-4 gap-3 mb-6">
+                    <div class="stat-card">
+                        <p id="total-claims" class="text-2xl font-bold">0</p>
+                        <p class="text-xs text-white/40">Total</p>
+                    </div>
+                    <div class="stat-card border-verified/30">
+                        <p id="verified-claims" class="text-2xl font-bold text-verified">0</p>
+                        <p class="text-xs text-white/40">Verificado</p>
+                    </div>
+                    <div class="stat-card border-mixed/30">
+                        <p id="mixed-claims" class="text-2xl font-bold text-mixed">0</p>
+                        <p class="text-xs text-white/40">Misto</p>
+                    </div>
+                    <div class="stat-card border-unsupported/30">
+                        <p id="unsupported-claims" class="text-2xl font-bold text-unsupported">0</p>
+                        <p class="text-xs text-white/40">Nao Suportado</p>
+                    </div>
+                </div>
+
+                <!-- Processing Time -->
+                <div class="flex justify-between text-sm text-white/40 mb-6 pt-4 border-t border-white/10">
+                    <span>Tempo de processamento</span>
+                    <span id="processing-time" class="font-mono">0ms</span>
+                </div>
+
+                <!-- Export Buttons -->
+                <div class="flex gap-3">
+                    <button onclick="askExportPDF()" class="btn-secondary flex-1 py-3 text-white/70 hover:text-white flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Exportar PDF
+                    </button>
+                    <button onclick="exportJSON()" class="btn-secondary flex-1 py-3 text-white/70 hover:text-white flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                        </svg>
+                        Exportar JSON
+                    </button>
+                </div>
+            </div>
+
+            <!-- Claims List -->
+            <div id="claims-list" class="space-y-4"></div>
+
+            <!-- Back Button -->
+            <button onclick="resetToInput()" class="btn-secondary w-full py-4 mt-6 text-white/70 hover:text-white">
+                Verificar outro texto
+            </button>
+        </div>
+
+        <!-- Error Section -->
+        <div id="error-section" class="glass-card p-8 text-center hidden border-red-500/30">
+            <svg class="w-16 h-16 mx-auto mb-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <h3 class="text-xl font-semibold mb-2 text-red-400">Erro</h3>
+            <p id="error-message" class="text-white/50 mb-6">Ocorreu um erro</p>
+            <button onclick="resetToInput()" class="btn-primary px-8 py-3 text-white">Tentar novamente</button>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast">
+        <p id="toast-message" class="text-sm font-medium"></p>
+    </div>
+
+    <!-- PDF Modal -->
+    <div id="pdf-modal" class="hidden">
+        <div class="modal-overlay" onclick="closePDFModal()"></div>
+        <div class="modal-content">
+            <div class="glass-card p-8">
+                <div class="text-center mb-6">
+                    <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-violet-500/20 flex items-center justify-center">
+                        <svg class="w-8 h-8 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">Exportar como PDF</h3>
+                    <p class="text-white/50 text-sm">Gerar um relatorio PDF com todos os resultados da verificacao.</p>
+                </div>
+                
+                <div class="mb-6">
+                    <label class="block text-sm text-white/70 mb-2">Titulo do Relatorio (opcional)</label>
+                    <input type="text" id="pdf-title" placeholder="Relatorio de Verificacao" class="input-field w-full px-4 py-3">
+                </div>
+                
+                <div class="mb-6">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" id="include-evidence" checked class="w-5 h-5 rounded">
+                        <span class="text-white/70 text-sm">Incluir fontes de evidencia</span>
+                    </label>
+                </div>
+                
+                <div class="flex gap-3">
+                    <button onclick="closePDFModal()" class="btn-secondary flex-1 py-3 text-white/70">Cancelar</button>
+                    <button onclick="generatePDF()" class="btn-primary flex-1 py-3 text-white">Gerar PDF</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'text';
+        let currentResults = null;
+        let selectedFile = null;
+
+        function switchTab(tab) {
+            currentTab = tab;
+            ['text', 'url', 'file'].forEach(t => {
+                document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
+                document.getElementById(`content-${t}`).classList.toggle('hidden', t !== tab);
+            });
+        }
+
+        function handleFile(input) {
+            if (input.files && input.files[0]) {
+                selectedFile = input.files[0];
+                document.getElementById('file-name').textContent = selectedFile.name;
+                document.getElementById('file-name').classList.remove('hidden');
+            }
+        }
+
+        async function createAPIKey() {
+            try {
+                const response = await fetch('/api/keys', { method: 'POST' });
+                const data = await response.json();
+                if (data.key) {
+                    document.getElementById('api-key').value = data.key;
+                    showToast('Chave API criada com sucesso!', 'success');
+                }
+            } catch (error) {
+                showToast('Erro ao criar chave API', 'error');
+            }
+        }
+
+        async function verifyContent() {
+            const apiKey = document.getElementById('api-key').value.trim();
+            if (!apiKey) {
+                showToast('Por favor, insira uma chave API', 'error');
+                return;
+            }
+
+            let content = '';
+            if (currentTab === 'text') {
+                content = document.getElementById('text-input').value.trim();
+            } else if (currentTab === 'url') {
+                content = document.getElementById('url-input').value.trim();
+            }
+
+            if (!content && currentTab !== 'file') {
+                showToast('Por favor, insira conteudo para verificar', 'error');
+                return;
+            }
+
+            showSection('loading');
+
+            try {
+                const response = await fetch('/api/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': apiKey
+                    },
+                    body: JSON.stringify({ text: content })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Erro na verificacao');
+                }
+
+                const data = await response.json();
+                currentResults = data;
+                showResults(data);
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        function showSection(section) {
+            ['input', 'loading', 'results', 'error'].forEach(s => {
+                document.getElementById(`${s}-section`).classList.toggle('hidden', s !== section);
+            });
+        }
+
+        function showResults(data) {
+            showSection('results');
+            
+            const analysis = data.analysis;
+            document.getElementById('score-value').textContent = analysis.overall_score.toFixed(1);
+            document.getElementById('total-claims').textContent = analysis.total_claims;
+            document.getElementById('verified-claims').textContent = analysis.verified_claims;
+            document.getElementById('mixed-claims').textContent = analysis.mixed_claims;
+            document.getElementById('unsupported-claims').textContent = analysis.unsupported_claims;
+            document.getElementById('processing-time').textContent = `${analysis.processing_time_ms}ms`;
+
+            const score = analysis.overall_score;
+            let label = 'Baixa Confianca';
+            if (score >= 7) label = 'Alta Confianca';
+            else if (score >= 4) label = 'Confianca Moderada';
+            document.getElementById('score-label').textContent = label;
+
+            renderClaims(data.claims);
+        }
+
+        function renderClaims(claims) {
+            const container = document.getElementById('claims-list');
+            const statusLabels = {
+                verified: 'Verificado',
+                mixed: 'Misto',
+                unsupported: 'Nao Suportado'
+            };
+
+            container.innerHTML = claims.map((claim, i) => {
+                const barColor = claim.confidence > 0.7 ? '#10b981' : claim.confidence > 0.4 ? '#f59e0b' : '#ef4444';
+                return `
+                    <div class="glass-card p-6">
+                        <div class="flex items-start justify-between gap-4 mb-3">
+                            <span class="pill pill-${claim.status}">${statusLabels[claim.status] || claim.status}</span>
+                            <span class="text-xs text-white/40">${claim.type || 'factual'}</span>
+                        </div>
+                        <p class="text-white/90 mb-4">${escapeHtml(claim.text)}</p>
+                        <div class="mb-3">
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-white/40">Confianca</span>
+                                <span class="text-white/60">${(claim.confidence * 100).toFixed(0)}%</span>
+                            </div>
+                            <div class="confidence-bar">
+                                <div class="confidence-fill" style="width: ${claim.confidence * 100}%; background: ${barColor};"></div>
+                            </div>
+                        </div>
+                        ${claim.reasoning ? `<p class="text-sm text-white/50 italic mb-3">"${escapeHtml(claim.reasoning)}"</p>` : ''}
+                        ${claim.evidences && claim.evidences.length ? `
+                            <div class="mt-4 pt-4 border-t border-white/10">
+                                <p class="text-xs text-white/40 uppercase mb-2">Fontes</p>
+                                ${claim.evidences.slice(0, 2).map(e => `
+                                    <a href="${escapeHtml(e.source_url)}" target="_blank" class="block p-2 bg-white/5 rounded-lg mb-2 hover:bg-white/10 transition">
+                                        <span class="text-xs text-violet-400">${escapeHtml(e.source_name)}</span>
+                                        <p class="text-xs text-white/40 mt-1 line-clamp-1">${escapeHtml(e.snippet?.substring(0, 100) || '')}...</p>
+                                    </a>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function showError(message) {
+            showSection('error');
+            document.getElementById('error-message').textContent = message;
+        }
+
+        function resetToInput() {
+            showSection('input');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const msg = document.getElementById('toast-message');
+            msg.textContent = message;
+            msg.className = `text-sm font-medium ${type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : 'text-white'}`;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // PDF Export
+        function askExportPDF() {
+            if (!currentResults) {
+                showToast('Sem resultados para exportar', 'error');
+                return;
+            }
+            document.getElementById('pdf-modal').classList.remove('hidden');
+        }
+
+        function closePDFModal() {
+            document.getElementById('pdf-modal').classList.add('hidden');
+        }
+
+        function generatePDF() {
+            if (!currentResults) return;
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const title = document.getElementById('pdf-title').value || 'Relatorio de Verificacao';
+            const includeEvidence = document.getElementById('include-evidence').checked;
+            const analysis = currentResults.analysis;
+            const claims = currentResults.claims;
+
+            let y = 20;
+            const margin = 20;
+            const pageWidth = doc.internal.pageSize.getWidth();
+
+            // Header
+            doc.setFontSize(24);
+            doc.setTextColor(139, 92, 246);
+            doc.text('Verity', margin, y);
+            doc.setFontSize(10);
+            doc.setTextColor(128, 128, 128);
+            doc.text('Verificador de Factos IA', margin + 30, y);
+
+            y += 15;
+            doc.setDrawColor(139, 92, 246);
+            doc.line(margin, y, pageWidth - margin, y);
+
+            // Title
+            y += 15;
+            doc.setFontSize(16);
+            doc.setTextColor(0, 0, 0);
+            doc.text(title, margin, y);
+
+            y += 8;
+            doc.setFontSize(10);
+            doc.setTextColor(128, 128, 128);
+            doc.text(`Gerado: ${new Date().toLocaleString('pt-PT')}`, margin, y);
+
+            // Summary
+            y += 15;
+            doc.setFillColor(245, 247, 250);
+            doc.roundedRect(margin, y, pageWidth - margin * 2, 30, 3, 3, 'F');
+
+            y += 10;
+            doc.setFontSize(12);
+            doc.setTextColor(0, 0, 0);
+            doc.text('Resumo', margin + 5, y);
+
+            y += 7;
+            doc.setFontSize(10);
+            doc.text(`Pontuacao: ${analysis.overall_score.toFixed(1)}/10`, margin + 5, y);
+            doc.text(`Total: ${analysis.total_claims}`, margin + 50, y);
+            doc.setTextColor(16, 185, 129);
+            doc.text(`Verificado: ${analysis.verified_claims}`, margin + 85, y);
+            doc.setTextColor(245, 158, 11);
+            doc.text(`Misto: ${analysis.mixed_claims}`, margin + 125, y);
+            doc.setTextColor(239, 68, 68);
+            doc.text(`Nao Suportado: ${analysis.unsupported_claims}`, margin + 155, y);
+
+            // Claims
+            y += 20;
+            doc.setFontSize(14);
+            doc.setTextColor(0, 0, 0);
+            doc.text('Afirmacoes Analisadas', margin, y);
+            y += 10;
+
+            claims.forEach((claim, idx) => {
+                if (y > 260) {
+                    doc.addPage();
+                    y = 20;
+                }
+
+                const statusColors = {
+                    verified: [16, 185, 129],
+                    mixed: [245, 158, 11],
+                    unsupported: [239, 68, 68]
+                };
+                const color = statusColors[claim.status] || [128, 128, 128];
+
+                doc.setFillColor(250, 250, 252);
+                doc.roundedRect(margin, y, pageWidth - margin * 2, 25, 2, 2, 'F');
+                doc.setFillColor(...color);
+                doc.roundedRect(margin, y, 3, 25, 1, 1, 'F');
+
+                y += 8;
+                doc.setFontSize(9);
+                doc.setTextColor(...color);
+                doc.text(`${claim.status.toUpperCase()} - ${(claim.confidence * 100).toFixed(0)}%`, margin + 8, y);
+
+                y += 7;
+                doc.setFontSize(10);
+                doc.setTextColor(40, 40, 40);
+                const lines = doc.splitTextToSize(claim.text, pageWidth - margin * 2 - 15);
+                doc.text(lines.slice(0, 2), margin + 8, y);
+
+                y += 18;
+            });
+
+            // Footer
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.setTextColor(150, 150, 150);
+                doc.text(`Pagina ${i} de ${pageCount}`, pageWidth / 2, 290, { align: 'center' });
+            }
+
+            doc.save(`${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${Date.now()}.pdf`);
+            closePDFModal();
+            showToast('PDF exportado com sucesso!', 'success');
+        }
+
+        function exportJSON() {
+            if (!currentResults) {
+                showToast('Sem resultados para exportar', 'error');
+                return;
+            }
+
+            const blob = new Blob([JSON.stringify(currentResults, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `verity_resultados_${Date.now()}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            showToast('JSON exportado com sucesso!', 'success');
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closePDFModal();
+        });
+    </script>
+</body>
+</html>

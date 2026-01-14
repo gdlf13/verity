@@ -1,0 +1,30 @@
+# Binary
+verity
+verity.exe
+verity-*
+
+# Configuration with secrets
+verity.yaml
+*.env
+
+# Database
+data/
+*.db
+*.db-journal
+*.db-wal
+
+# Go
+*.test
+coverage.out
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
