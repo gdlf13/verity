@@ -13,7 +13,7 @@ database:
 llm:
   provider: openai  # openai, anthropic, gemini, ollama
   model: gpt-4o-mini
-  api_key: ${OPENAI_API_KEY}
+  api_key: ${OPENAI_API_KEY}  # Replace with your OpenAI API key
   embedding_model: text-embedding-ada-002
 
   # For Anthropic Claude:
